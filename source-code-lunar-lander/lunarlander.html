@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>lunarlander</title>
+  <script src="../../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+<section id="imageLoader" class="hidden">
+  <img class="hidden" src="images/background.png" alt="background">
+  <img class="hidden" src="images/lander.png" alt="lander">
+  <img class="hidden" src="images/landerburn.png" alt="landerburn">
+  <img class="hidden" src="images/space.png" alt="space">
+</section>
+
+<main>
+<h1>lunarlander</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<h2>Attribution</h2>
+
+<p><a href="https://wireframe.raspberrypi.org/issues/37">Source Code: code a homage to Lunar Lander, pages 40-41, by Mark Vanstone</a>.</p>
+
+<p>Licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/legalcode">Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported</a>.</p>
+
+<h2>Original Python code</h2>
+
+<pre id="original"><code>
+# Lunar Lander
+import math
+from pygame import image, Color
+import time
+start_time = time.time()
+backgroundImage = image.load(&#x27;images/background.png&#x27;)
+lander = Actor(&#x27;lander&#x27;,(50,30))
+lander.angle = lander.direction = -80
+lander.thrust = 0.5
+gravity = 0.8
+lander.burn = speedDown = gameState = gameTime = 0
+
+def draw():
+    global gameTime
+    screen.blit(&#x27;background&#x27;,(0,0))
+    screen.blit(&#x27;space&#x27;,(0,0))
+    r = lander.angle
+    if(lander.burn &gt; 0):
+        lander.image = &quot;landerburn&quot;
+    else:
+        lander.image = &quot;lander&quot;
+    lander.angle = r
+    lander.draw()
+    if gameState == 0:
+        gameTime = int(time.time() - start_time)
+    screen.draw.text(&quot;Altitude : &quot;+ str(getAlt()), topleft=(650, 10), owidth=0.5, ocolor=(255,0,0), color=(255,255,0) , fontsize=25)
+    screen.draw.text(&quot;Time : &quot;+ str(gameTime), topleft=(40, 10), owidth=0.5, ocolor=(255,0,0), color=(255,255,0) , fontsize=25)
+    if gameState == 2:
+        screen.draw.text(&quot;Congratulations \nThe Eagle Has Landed&quot;, center=(400, 50), owidth=0.5, ocolor=(255,0,0), color=(255,255,0) , fontsize=35)
+    if gameState == 1:
+        screen.draw.text(&quot;Crashed&quot;, center=(400, 50), owidth=0.5, ocolor=(255,0,0), color=(255,255,0) , fontsize=35)
+
+def update():
+    global gameState, speedDown
+    if gameState == 0:
+        if keyboard.up:
+            lander.thrust = limit(lander.thrust+0.01,0,1)
+            changeDirection()
+            lander.burn = 1
+        if keyboard.left: lander.angle += 1
+        if keyboard.right: lander.angle -= 1
+        oldPos = lander.center
+        lander.y += gravity
+        newPos = calcNewXY(lander.center, lander.thrust, math.radians(90-lander.direction))
+        lander.center = newPos
+        speedDown = newPos[1] - oldPos[1]
+        lander.thrust = limit(lander.thrust-0.001,0,1)
+        lander.burn = limit(lander.burn-0.05,0,1)
+        if speedDown &lt; 0.2 and getAlt() == 1 and lander.angle &gt; -5 and lander.angle &lt; 5:
+            gameState = 2
+        if getAlt() == 0:
+            gameState = 1
+
+def changeDirection():
+    if lander.direction &gt; lander.angle: lander.direction -= 1
+    if lander.direction &lt; lander.angle: lander.direction += 1
+
+def limit(n, minn, maxn):
+    return max(min(maxn, n), minn)
+
+def calcNewXY(xy,speed,ang):
+    newx = xy[0] - (speed*math.cos(ang))
+    newy = xy[1] - (speed*math.sin(ang))
+    return newx, newy
+
+def getAlt():
+    testY = lander.y+8
+    height = 0;
+    while testPixel((int(lander.x),int(testY))) == Color(&#x27;black&#x27;) and height &lt; 600:
+        testY += 1
+        height += 1
+    return height
+
+def testPixel(xy):
+    if xy[0] &gt;= 0 and xy[0] &lt; 800 and xy[1] &gt;= 0 and xy[1] &lt; 600:
+        return backgroundImage.get_at(xy)
+    else:
+        return Color(&#x27;black&#x27;)
+</code></pre>
+</main>
+
+<script>
+// Lunar Lander
+const GRAVITY = 0.8;
+
+var backgroundImage, lander, speedDown, gameState, gameTime;
+
+function reset() {
+  screen.clear();
+  screen.blit('background', [0, 0]);
+  backgroundImage = screen.getSurface();
+
+  lander = new Actor('lander');
+  lander.pos = [50, 30];
+  lander.angle = -80;
+  lander.direction = -80;
+  lander.thrust = 0.5;
+  lander.burn = 0;
+  speedDown = 0;
+  gameState = 0;
+  gameTime = 0;
+}
+
+function draw() {
+  screen.blit('background', [0, 0]);
+  screen.blit('space', [0, 0]);
+  if (lander.burn > 0) {
+    lander.name = "landerburn";
+  }
+  else {
+    lander.name = "lander";
+  }
+  lander.draw();
+  screen.draw.text("Altitude : " + getAlt(), {
+    topleft: [650, 10],
+    owidth: 0.5,
+    ocolor: [255, 0, 0],
+    color: [255, 255, 0],
+    fontsize: 25
+  });
+  screen.draw.text("Time : " + gameTime.toFixed(0), {
+    topleft: [40, 10],
+    owidth: 0.5,
+    ocolor: [255, 0, 0],
+    color: [255, 255, 0],
+    fontsize: 25
+  });
+  if (gameState === 2) {
+    screen.draw.text("Congratulations \nThe Eagle Has Landed", {
+      center: [400, 50],
+      owidth: 0.5,
+      ocolor: [255, 0, 0],
+      color: [255, 255, 0],
+      fontsize: 35
+    });
+  }
+  if (gameState === 1) {
+    screen.draw.text("Crashed", {
+      center: [400, 50],
+      owidth: 0.5,
+      ocolor: [255, 0, 0],
+      color: [255, 255, 0],
+      fontsize: 35
+    });
+  }
+}
+
+function update(dt) {
+  if (gameState === 0) {
+    gameTime += dt;
+
+    if (keyboard[keys.UP]) {
+      lander.thrust = limit(lander.thrust + 0.01, 0, 1);
+      changeDirection();
+      lander.burn = 1;
+    }
+    if (keyboard[keys.LEFT]) {
+      lander.angle += 1;
+    }
+    if (keyboard[keys.RIGHT]) {
+      lander.angle -= 1;
+    }
+    let oldPos = lander.center;
+    lander.posy += GRAVITY;
+    let newPos = calcNewXY(lander.center, lander.thrust, (90 - lander.direction) * Math.PI / 180);
+    lander.center = newPos;
+    speedDown = newPos[1] - oldPos[1];
+    lander.thrust = limit(lander.thrust - 0.001, 0, 1);
+    lander.burn = limit(lander.burn - 0.05, 0, 1);
+    if ((speedDown < 0.2) && (getAlt() === 1) && (lander.angle > -5) && (lander.angle < 5)) {
+      gameState = 2;
+    }
+    if (getAlt() === 0) {
+      gameState = 1;
+    }
+  }
+}
+
+function changeDirection() {
+  if (lander.direction > lander.angle) {
+    lander.direction -= 1;
+  }
+  if (lander.direction < lander.angle) {
+    lander.direction += 1;
+  }
+}
+
+function limit(n, minn, maxn) {
+  return Math.max(Math.min(maxn, n), minn);
+}
+
+function calcNewXY(xy, speed, ang) {
+  return [xy[0] - (speed * Math.cos(ang)),
+          xy[1] - (speed * Math.sin(ang))];
+}
+
+function getAlt() {
+  let testY = lander.posy + 8,
+      height = 0;
+  while (Surface.isColorEqual(testPixel(Math.trunc(lander.posx), Math.trunc(testY)), [0, 0, 0]) && (height < 600)) {
+    testY += 1;
+    height += 1;
+  }
+  return height;
+}
+
+function testPixel(x, y) {
+  if ((x >= 0) && (x < 800) && (y >= 0) && (y < 600)) {
+    return backgroundImage.getAt(x, y);
+  }
+  else {
+    return [0, 0, 0];
+  }
+}
+
+window.addEventListener('load', (event) => {
+  images.LOAD('#imageLoader img');
+  // Non-standard order for Surface
+  screen.set_mode('#screen', '#reset', '#pause');
+  reset();
+  screen.draw.playButton();
+});
+</script>
+</body>
+
+</html>
