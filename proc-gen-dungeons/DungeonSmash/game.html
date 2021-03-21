@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DungeonSmash</title>
+  <script src="../../../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+<section id="imageLoader" class="hidden">
+  <img class="hidden" src="images/chest.png" alt="chest" data-name="chest">
+  <img class="hidden" src="images/dirt.png" alt="dirt" data-name="dirt">
+  <img class="hidden" src="images/enemy_00.png" alt="enemy_00" data-name="enemy_00">
+  <img class="hidden" src="images/enemy_01.png" alt="enemy_01" data-name="enemy_01">
+  <img class="hidden" src="images/floor_1.png" alt="floor_1" data-name="floor_1">
+  <img class="hidden" src="images/floor_2.png" alt="floor_2" data-name="floor_2">
+  <img class="hidden" src="images/player.png" alt="player" data-name="player">
+  <img class="hidden" src="images/sprite_00.png" alt="sprite_00" data-name="sprite_00">
+</section>
+
+<main>
+<h1>DungeonSmash</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<h2>Attribution</h2>
+
+<p><a href="https://wireframe.raspberrypi.org/issues/37">Make your own procedurally generated dungeons, pages 32-38, by Mac Bowley</a>.</p>
+
+<p>Licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/legalcode">Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported</a>.</p>
+
+<h2>Original Python code</h2>
+
+<pre id="original"><code>
+# Importing modules
+import secrets # Secrets is a crypto grade randomness library - in my opinion better than random for this.
+import math # For the math
+from collections import namedtuple
+from pygame import Rect
+
+WIDTH = 1024
+HEIGHT = 768
+
+# Map variables
+TILE_SIZE = 32 # Dimensions of the tiles - change if neccessary
+TILE_ACROSS = int(WIDTH/TILE_SIZE) # Use the previous variables to set a tile width
+TILE_DOWN = int(HEIGHT/TILE_SIZE) # and tile height
+
+MAX_ROOM_SIZE = 7
+MIN_ROOM_SIZE = 3
+ROOM_PADDING = 3
+
+MAP_BORDER = 1
+
+NUMBER_OF_ROOMS = 12
+
+LOOT_ROOMS = 2
+
+MAX_ENEMIES = NUMBER_OF_ROOMS*2
+
+Room = namedtuple(&#x27;Room&#x27;, [&#x27;width&#x27;, &#x27;height&#x27;, &#x27;pos_x&#x27;, &#x27;pos_y&#x27;])
+
+def generate_room():
+    rm_width = MIN_ROOM_SIZE + secrets.randbelow(MAX_ROOM_SIZE - MIN_ROOM_SIZE + 1)
+    rm_height = MIN_ROOM_SIZE + secrets.randbelow(MAX_ROOM_SIZE - MIN_ROOM_SIZE + 1)
+
+    rm_pos_x = secrets.randbelow(TILE_ACROSS - rm_width)
+    if rm_pos_x &lt; MAP_BORDER:
+        rm_pos_x = MAP_BORDER
+    rm_pos_y = secrets.randbelow(TILE_DOWN - rm_height)
+    if rm_pos_y &lt; MAP_BORDER:
+        rm_pos_y = MAP_BORDER
+
+    return Room(rm_width, rm_height, rm_pos_x, rm_pos_y)
+
+def create_rooms():
+    Rooms = []
+    for i in range(NUMBER_OF_ROOMS):
+        intersect = True
+        while intersect:
+            intersect = False
+            rm = generate_room()
+            for other in Rooms:
+                room = other[0]
+                padded_pos_x = rm.pos_x - 1
+                padded_pos_y = rm.pos_y - 1
+                padded_width = rm.width + 3
+                padded_height = rm.height + 3
+                rm_1 = Rect((room.pos_x*32, room.pos_y*32), (room.width*32, room.height*32))
+                rm_2 = Rect((padded_pos_x*32, padded_pos_y*32), (padded_width*32, padded_height*32))
+                if rm_1.colliderect(rm_2):
+                    intersect = True
+        Rooms.append([rm, {&quot;NORTH&quot;: None, &quot;SOUTH&quot;: None, &quot;EAST&quot;: None, &quot;WEST&quot;: None}])
+    return Rooms
+
+def create_corridors(rm, Rooms):
+    candidates = {&quot;NORTH&quot;: None, &quot;SOUTH&quot;: None, &quot;EAST&quot;: None, &quot;WEST&quot;: None}
+    for other in Rooms:
+        if other[0] != rm[0]:
+            current_room = rm[0]
+            other_room = other[0]
+            left_marker = max(current_room.pos_x, other_room.pos_x)
+            right_marker = min(current_room.pos_x + current_room.width, other_room.pos_x + other_room.width)
+            horizontal_overlap = list(range(left_marker, right_marker))
+            if len(horizontal_overlap) &gt; 0:
+                vertical_corridors(candidates, other, rm, horizontal_overlap)
+            top_marker = max(current_room.pos_y, other_room.pos_y)
+            bottom_marker = min(current_room.pos_y + current_room.height, other_room.pos_y + other_room.height)
+            vertical_overlap = list(range(top_marker, bottom_marker))
+            if len(vertical_overlap) &gt; 0:
+                horizontal_corridors(candidates, other, rm, vertical_overlap)
+    return candidates
+
+
+def vertical_corridors(candidates, other, rm, horizontal_overlap):
+    current_room = rm[0]
+    current_connections = rm[1]
+    other_room = other[0]
+    other_connections = other[1]
+    if current_room.pos_y &gt; other_room.pos_y and other_connections[&quot;SOUTH&quot;] == None and current_connections[&quot;NORTH&quot;] != 0:
+        connector = candidates[&quot;NORTH&quot;]
+        if connector == None:
+            candidates[&quot;NORTH&quot;] = (other, horizontal_overlap)
+            other_connections[&quot;SOUTH&quot;] = 0
+        else:
+            if other_room.pos_y + other_room.height &gt; connector[0][0].pos_y + connector[0][0].height:
+                connector[0][1][&quot;SOUTH&quot;] = None
+                candidates[&quot;NORTH&quot;] = (other, horizontal_overlap)
+                other_connections[&quot;SOUTH&quot;] = 0
+    if current_room.pos_y &lt; other_room.pos_y and other_connections[&quot;NORTH&quot;] == None and current_connections[&quot;SOUTH&quot;] != 0:
+        connector = candidates[&quot;SOUTH&quot;]
+        if connector == None:
+            candidates[&quot;SOUTH&quot;] = (other, horizontal_overlap)
+            other_connections[&quot;NORTH&quot;] = 0
+        else:
+            if other_room.pos_y &lt; connector[0][0].pos_y:
+                connector[0][1][&quot;NORTH&quot;] = None
+                candidates[&quot;SOUTH&quot;] = (other, horizontal_overlap)
+                other_connections[&quot;NORTH&quot;] = 0
+
+def horizontal_corridors(candidates, other, rm, vertical_overlap):
+    current_room = rm[0]
+    current_connections = rm[1]
+    other_room = other[0]
+    other_connections = other[1]
+    if current_room.pos_x &gt; other_room.pos_x and other_connections[&quot;EAST&quot;] == None and current_connections[&quot;WEST&quot;] != 0:
+        connector = candidates[&quot;WEST&quot;]
+        if connector == None:
+            candidates[&quot;WEST&quot;] = (other, vertical_overlap)
+            other_connections[&quot;EAST&quot;] = 0
+        else:
+            if other_room.pos_x &lt; connector[0][0].pos_x:
+                connector[0][1][&quot;EAST&quot;] = None
+                candidates[&quot;WEST&quot;] = (other, vertical_overlap)
+                other_connections[&quot;EAST&quot;] = 0
+    if current_room.pos_x &lt; other_room.pos_x and other_connections[&quot;WEST&quot;] == None and current_connections[&quot;EAST&quot;] != 0:
+        connector = candidates[&quot;EAST&quot;]
+        if connector == None:
+            candidates[&quot;EAST&quot;] = (other, vertical_overlap)
+            other_connections[&quot;WEST&quot;] = 0
+        else:
+            if other_room.pos_x + other_room.width &lt; connector[0][0].pos_x + connector[0][0].width:
+                connector[0][1][&quot;WEST&quot;] = None
+                candidates[&quot;EAST&quot;] = (other, vertical_overlap)
+                other_connections[&quot;WEST&quot;] = 0
+
+def find_position(Room, Map):
+    x_pos = Room.pos_x + secrets.randbelow(Room.width - 1)
+    y_pos = Room.pos_y + secrets.randbelow(Room.height - 1)
+    while Map[x_pos][y_pos] != 1:
+        x_pos = Room.pos_x + secrets.randbelow(Room.width)
+        y_pos = Room.pos_y + secrets.randbelow(Room.height)
+    return x_pos, y_pos
+
+def placeEnemies(Rooms, Map):
+    for i in range(NUMBER_OF_ROOMS - LOOT_ROOMS):
+        room = secrets.choice(Rooms)
+        amount_of_enemies = secrets.randbelow(4)
+        for enemy in range(amount_of_enemies):
+            x_pos, y_pos = find_position(room[0], Map)
+            Map[x_pos][y_pos] = 4
+        chest_x_pos, chest_y_pos = find_position(room[0], Map)
+        Map[chest_x_pos][chest_y_pos] = 6
+        Rooms.remove(room)
+    return Map
+
+def placeBoss(boss_room, Map):
+    x_pos = boss_room.pos_x + (boss_room.width//2)
+    y_pos = boss_room.pos_y + (boss_room.height//2)
+
+    Map[x_pos][y_pos] = 5
+
+    boss_enemies = secrets.randbelow(4) + 1
+
+    for henchman in range(boss_enemies):
+        hench_x, hench_y = find_position(boss_room, Map)
+        Map[hench_x][hench_y] = 4
+
+    for chest in range(2):
+        chest_x_pos, chest_y_pos = find_position(boss_room, Map)
+        Map[chest_x_pos][chest_y_pos] = 6
+
+    return Map
+
+def placePlayer(room, Map):
+    player_x, player_y = find_position(room, Map)
+    Map[player_x][player_y] = 7
+    return Map
+
+def populateRooms(Rooms, Map):
+    biggestArea = 0
+    biggestRoom = &quot;&quot;
+    smallestArea = math.inf
+    smallestRoom = &quot;&quot;
+
+    for rm in Rooms:
+        area = rm[0].width * rm[0].height
+        if area &gt;= biggestArea:
+            biggestArea = area
+            biggestRoom = rm
+        if area &lt;= smallestArea:
+            smallestArea = area
+            smallestRoom = rm
+    rooms_to_populate = Rooms
+    rooms_to_populate.remove(biggestRoom)
+    rooms_to_populate.remove(smallestRoom)
+
+    Map = placeEnemies(rooms_to_populate, Map)
+
+    boss_room = biggestRoom[0]
+    Map = placeBoss(boss_room, Map)
+
+    player_spawn = smallestRoom[0]
+    Map = placePlayer(player_spawn, Map)
+    return Map
+
+def create_map():
+    Map = []
+    for x in range(TILE_ACROSS):
+        row = []
+        for y in range(TILE_DOWN):
+            row.append(0)
+        Map.append(row)
+    Rooms = create_rooms()
+    for rm in Rooms:
+        for x in range(rm[0].width):
+            for y in range(rm[0].height):
+                Map[rm[0].pos_x+x][rm[0].pos_y+y] = 1
+        rm[1] = create_corridors(rm, Rooms)
+        #Create the corridors on the map array
+        for key, value in rm[1].items():
+            if len(rm[1].items()) &gt; 1:
+                skip = secrets.randbelow(100) # Chance to skip drawing this corridor
+            else:
+                skip = 100
+            if value is not None and value is not 0 and skip &gt; 20:
+                dir = [0, 0]
+                start_pos = [rm[0].pos_x, rm[0].pos_y]
+                end_pos = [value[0][0].pos_x, value[0][0].pos_y]
+                mid_overlap = value[1][len(value[1])//2]
+                if key == &quot;NORTH&quot;:
+                    dir[1] = -1
+                    start_pos[0] = mid_overlap
+                    start_pos[1] -= 1
+                    end_pos[0] = mid_overlap
+                    end_pos[1] += value[0][0].height
+                    tile = 3
+                elif key == &quot;SOUTH&quot;:
+                    dir[1] = 1
+                    start_pos[0] = mid_overlap
+                    start_pos[1] += rm[0].height
+                    end_pos[0] = mid_overlap
+                    end_pos[1] -= 1
+                    tile = 3
+                elif key == &quot;EAST&quot;:
+                    dir[0] = 1
+                    start_pos[0] += rm[0].width
+                    start_pos[1] = mid_overlap
+                    end_pos[0] -= 1
+                    end_pos[1] = mid_overlap
+                    tile = 2
+                elif key == &quot;WEST&quot;:
+                    dir[0] = -1
+                    start_pos[0] -= 1
+                    start_pos[1] = mid_overlap
+                    end_pos[0] += value[0][0].width
+                    end_pos[1] = mid_overlap
+                    tile = 2
+                Map[start_pos[0]][start_pos[1]] = tile
+                Map[end_pos[0]][end_pos[1]] = tile
+                distance = (start_pos[0] - end_pos[0]) + (start_pos[1] - end_pos[1])
+                next_pos = start_pos
+                for i in range(abs(distance)):
+                    next_pos = [next_pos[0] + dir[0], next_pos[1] + dir[1]]
+                    if Map[next_pos[0]][next_pos[1]] == 0:
+                        Map[next_pos[0]][next_pos[1]] = tile
+    Map = populateRooms(Rooms, Map)
+    return Map
+
+
+from Map_Generator import create_map
+from tiles import *
+from collections import namedtuple
+
+## Dimensions of the tiles - change if neccessary
+TILE_SIZE = 32
+
+## Window Parameters // Viewport
+SCREEN_WIDTH = 10
+SCREEN_HEIGHT = 8
+
+## Pygame Zero width and height for the game
+WIDTH = SCREEN_WIDTH * TILE_SIZE
+HEIGHT = SCREEN_HEIGHT * TILE_SIZE
+
+## Set up world co-ordinates
+## Top left corner of the screen
+screen_pos = [0, 0]
+## Player world co-ordinates
+playerTile = [0, 0]
+
+## Create the player Actor
+player = Actor(player_image)
+
+## Create the player variables
+class Player:
+    def __init__(self, actor, health, inventory):
+        self.Actor = actor
+        self.Health = health
+        self.Inventory = inventory
+
+
+    def Attack(self):
+        global playerTile, Map
+        for y in range(-1, 2):
+            for x in range(-1, 2):
+                check_x = playerTile[0] + x
+                check_y = playerTile[1] + y
+                if Map[check_x][check_y] == 4 or Map[check_x][check_y] == 5:
+                    Map[check_x][check_y] = 1
+                    break
+
+player_object = Player(player, 100, {})
+
+
+## Generate the first Map
+Map = create_map()
+## Search the Map for spawn positions
+for x in range(len(Map)):
+    for y in range(len(Map[0])):
+        if Map[x][y] == 7:
+            playerTile = [x, y]
+            Map[x][y] = 1
+
+def camera_follow():
+    global screen_pos
+    screen_pos[0] = playerTile[0] - (SCREEN_WIDTH//2)
+    screen_pos[1] = playerTile[1] - (SCREEN_HEIGHT//2)
+
+    if screen_pos[0] &lt; 0:
+        screen_pos[0] = 0
+    elif screen_pos[0] + SCREEN_WIDTH &gt; len(Map):
+        screen_pos[0] = len(Map)-SCREEN_WIDTH
+
+    if screen_pos[1] &lt; 0:
+        screen_pos[1] = 0
+    elif screen_pos[1] + SCREEN_HEIGHT &gt; len(Map[0]):
+        screen_pos[1] = len(Map[0])-SCREEN_HEIGHT
+
+camera_follow()
+
+def on_key_down(key):
+    global playerTile
+    if key == key.A :
+        player_object.Attack()
+    new_pos = [playerTile[0], playerTile[1]]
+    if key == key.RIGHT:
+        new_pos[0] += 1
+    if key == key.LEFT:
+        new_pos[0] -= 1
+    if key == key.UP:
+        new_pos[1] -= 1
+    if key == key.DOWN:
+        new_pos[1] += 1
+    if movement_collision(new_pos) == True:
+        playerTile[0] = new_pos[0]
+        playerTile[1] = new_pos[1]
+    camera_follow()
+
+def movement_collision(position):
+    global Map
+    tile = Map[position[0]][position[1]]
+    if tile == 1 or tile == 2 or tile == 3 or tile == 4:
+        return True
+    elif tile == 0:
+        return False
+    elif tile == 6:
+        Map[position[0]][position[1]] = 1
+        print(&quot;Gold!&quot;)
+
+def draw_level():
+    global player
+    for i in range(SCREEN_WIDTH):
+        for j in range(SCREEN_HEIGHT):
+            x = screen_pos[0] + i
+            y = screen_pos[1] + j
+            if Map[x][y] == 0:
+                screen.blit(dirt_tile, (i*32, j*32))
+            elif Map[x][y] == 1:
+                screen.blit(room_tile, (i*32, j*32))
+            elif Map[x][y] == 2:
+                screen.blit(south_corridor, (i*32, j*32))
+            elif Map[x][y] == 3:
+                screen.blit(north_corridor, (i*32, j*32))
+            elif Map[x][y] == 4:
+                screen.blit(room_tile, (i*32, j*32))
+                screen.blit(enemy_basic, (i*32, j*32))
+            elif Map[x][y] == 5:
+                screen.blit(room_tile, (i*32, j*32))
+                screen.blit(enemy_boss, (i*32, j*32))
+            elif Map[x][y] == 6:
+                screen.blit(room_tile, (i*32, j*32))
+                screen.blit(chest, (i*32, j*32))
+            elif Map[x][y] == 7:
+                screen.blit(room_tile, (i*32, j*32))
+
+            if x == playerTile[0] and y == playerTile[1]:
+                player.x = i*32+player.width//2
+                player.y = j*32+player.height//2
+
+def draw():
+    draw_level()
+    player.draw()
+
+</code></pre>
+</main>
+
+<script>
+/*
+ * Procedurally generated dungeons code
+ */
+const MAP_WIDTH = 1024;
+const MAP_HEIGHT = 768;
+
+// Map variables
+const TILE_SIZE = 32; // Dimensions of the tiles - change if neccessary
+const TILE_ACROSS = Math.trunc(MAP_WIDTH / TILE_SIZE); // Use the previous variables to set a tile width
+const TILE_DOWN = Math.trunc(MAP_HEIGHT / TILE_SIZE); // and tile height
+
+const MAX_ROOM_SIZE = 7;
+const MIN_ROOM_SIZE = 3;
+const ROOM_PADDING = 3;
+
+const MAP_BORDER = 1;
+
+const NUMBER_OF_ROOMS = 12;
+
+const LOOT_ROOMS = 2;
+
+const MAX_ENEMIES = NUMBER_OF_ROOMS * 2;
+
+class Room {
+  constructor(width, height, pos_x, pos_y) {
+    this.width = width;
+    this.height = height;
+    this.pos_x = pos_x;
+    this.pos_y = pos_y;
+  }
+}
+
+/*
+ * Return a random integer N such that min <= N < max.
+ */
+function getRandomInteger(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor((Math.random() * (max - min)) + min);
+}
+
+function generate_room() {
+  let rm_width = MIN_ROOM_SIZE + getRandomInteger(0, MAX_ROOM_SIZE - MIN_ROOM_SIZE + 1),
+      rm_height = MIN_ROOM_SIZE + getRandomInteger(0, MAX_ROOM_SIZE - MIN_ROOM_SIZE + 1),
+      rm_pos_x = getRandomInteger(0, TILE_ACROSS - rm_width),
+      rm_pos_y = getRandomInteger(0, TILE_DOWN - rm_height);
+  if (rm_pos_x < MAP_BORDER) {
+    rm_pos_x = MAP_BORDER;
+  }
+  if (rm_pos_y < MAP_BORDER) {
+    rm_pos_y = MAP_BORDER;
+  }
+
+  return new Room(rm_width, rm_height, rm_pos_x, rm_pos_y);
+}
+
+function create_rooms() {
+  let rooms = [],
+      intersect, rm;
+  for (let i = 0; i < NUMBER_OF_ROOMS; i++) {
+    intersect = true;
+    while (intersect) {
+      intersect = false;
+      rm = generate_room();
+      for (let other of rooms) {
+        let room = other[0],
+            padded_pos_x = rm.pos_x - 1,
+            padded_pos_y = rm.pos_y - 1,
+            padded_width = rm.width + 3,
+            padded_height = rm.height + 3,
+            rm_1 = new Rect([room.pos_x * 32, room.pos_y * 32], [room.width * 32, room.height * 32]),
+            rm_2 = new Rect([padded_pos_x * 32, padded_pos_y * 32], [padded_width * 32, padded_height * 32]);
+        if (rm_1.colliderect(rm_2)) {
+          intersect = true;
+        }
+      }
+    }
+    rooms.push([rm, new Map([["NORTH", null], ["SOUTH", null], ["EAST", null], ["WEST", null]])]);
+  }
+  return rooms;
+}
+
+function create_corridors(rm, rooms) {
+  let candidates = new Map([["NORTH", null], ["SOUTH", null], ["EAST", null], ["WEST", null]]);
+  for (let other of rooms) {
+    if (other[0] != rm[0]) {
+      let current_room = rm[0],
+          other_room = other[0],
+          left_marker = Math.max(current_room.pos_x, other_room.pos_x),
+          right_marker = Math.min(current_room.pos_x + current_room.width, other_room.pos_x + other_room.width),
+          horizontal_overlap = [],
+          top_marker = Math.max(current_room.pos_y, other_room.pos_y),
+          bottom_marker = Math.min(current_room.pos_y + current_room.height, other_room.pos_y + other_room.height),
+          vertical_overlap = [];
+      for (let i = left_marker; i < right_marker; i++) {
+        horizontal_overlap.push(i);
+      }
+      if (horizontal_overlap.length > 0) {
+        vertical_corridors(candidates, other, rm, horizontal_overlap);
+      }
+      for (let i = top_marker; i < bottom_marker; i++) {
+        vertical_overlap.push(i);
+      }
+      if (vertical_overlap.length > 0) {
+        horizontal_corridors(candidates, other, rm, vertical_overlap);
+      }
+    }
+  }
+  return candidates;
+}
+
+function vertical_corridors(candidates, other, rm, horizontal_overlap) {
+  let current_room = rm[0],
+      current_connections = rm[1],
+      other_room = other[0],
+      other_connections = other[1],
+      connector;
+  if ((current_room.pos_y > other_room.pos_y) && (other_connections.get("SOUTH") == null) && (current_connections.get("NORTH") != 0)) {
+    connector = candidates.get("NORTH");
+    if (connector == null) {
+      candidates.set("NORTH", [other, horizontal_overlap]);
+      other_connections.set("SOUTH", 0);
+    }
+    else {
+      if ((other_room.pos_y + other_room.height) > (connector[0][0].pos_y + connector[0][0].height)) {
+        connector[0][1].set("SOUTH", null);
+        candidates.set("NORTH", [other, horizontal_overlap]);
+        other_connections.set("SOUTH", 0);
+      }
+    }
+  }
+  if ((current_room.pos_y < other_room.pos_y) && (other_connections.get("NORTH") == null) && (current_connections.get("SOUTH") != 0)) {
+    connector = candidates.get("SOUTH");
+    if (connector == null) {
+      candidates.set("SOUTH", [other, horizontal_overlap]);
+      other_connections.set("NORTH", 0);
+    }
+    else {
+      if (other_room.pos_y < connector[0][0].pos_y) {
+        connector[0][1].set("NORTH", null);
+        candidates.set("SOUTH", [other, horizontal_overlap]);
+        other_connections.set("NORTH", 0);
+      }
+    }
+  }
+}
+
+function horizontal_corridors(candidates, other, rm, vertical_overlap) {
+  let current_room = rm[0],
+      current_connections = rm[1],
+      other_room = other[0],
+      other_connections = other[1],
+      connector;
+  if ((current_room.pos_x > other_room.pos_x) && (other_connections.get("EAST") == null) && (current_connections.get("WEST") != 0)) {
+    connector = candidates.get("WEST");
+    if (connector == null) {
+      candidates.set("WEST", [other, vertical_overlap]);
+      other_connections.set("EAST", 0);
+    }
+    else {
+      if (other_room.pos_x < connector[0][0].pos_x) {
+        connector[0][1].set("EAST", null);
+        candidates.set("WEST", [other, vertical_overlap]);
+        other_connections.set("EAST", 0);
+      }
+    }
+  }
+  if ((current_room.pos_x < other_room.pos_x) && (other_connections.get("WEST") == null) && (current_connections.get("EAST") != 0)) {
+    connector = candidates.get("EAST");
+    if (connector == null) {
+      candidates.set("EAST", [other, vertical_overlap]);
+      other_connections.set("WEST", 0);
+    }
+    else {
+      if ((other_room.pos_x + other_room.width) < (connector[0][0].pos_x + connector[0][0].width)) {
+        connector[0][1].set("WEST", null);
+        candidates.set("EAST", [other, vertical_overlap]);
+        other_connections.set("WEST", 0);
+      }
+    }
+  }
+}
+
+function find_position(room, map) {
+  let x_pos = room.pos_x + getRandomInteger(0, room.width - 1),
+      y_pos = room.pos_y + getRandomInteger(0, room.height - 1);
+  while (map[x_pos][y_pos] != 1) {
+    x_pos = room.pos_x + getRandomInteger(0, room.width);
+    y_pos = room.pos_y + getRandomInteger(0, room.height);
+  }
+  return [x_pos, y_pos];
+}
+
+function placeEnemies(rooms, map) {
+  for (let i = 0; i < (NUMBER_OF_ROOMS - LOOT_ROOMS); i++) {
+    let room = rooms[getRandomInteger(0, rooms.length)],
+        amount_of_enemies = getRandomInteger(0, 4);
+    for (let enemy = 0; enemy < amount_of_enemies; enemy++) {
+      let [x_pos, y_pos] = find_position(room[0], map);
+      map[x_pos][y_pos] = 4;
+    }
+    let [chest_x_pos, chest_y_pos] = find_position(room[0], map);
+    map[chest_x_pos][chest_y_pos] = 6;
+    rooms.splice(rooms.indexOf(room), 1);
+  }
+  return map;
+}
+
+function placeBoss(boss_room, map) {
+  let x_pos = boss_room.pos_x + Math.floor(boss_room.width / 2),
+      y_pos = boss_room.pos_y + Math.floor(boss_room.height / 2),
+      boss_enemies = getRandomInteger(0, 4) + 1;
+
+  map[x_pos][y_pos] = 5;
+
+  for (let henchman = 0; henchman < boss_enemies; henchman++) {
+    let [hench_x, hench_y] = find_position(boss_room, map);
+    map[hench_x][hench_y] = 4;
+  }
+
+  for (let chest = 0; chest < LOOT_ROOMS; chest++) {
+    let [chest_x_pos, chest_y_pos] = find_position(boss_room, map);
+    map[chest_x_pos][chest_y_pos] = 6;
+  }
+
+  return map;
+}
+
+function placePlayer(room, map) {
+  let [player_x, player_y] = find_position(room, map);
+  map[player_x][player_y] = 7;
+  return map;
+}
+
+function populateRooms(rooms, map) {
+  let biggestArea = 0,
+      biggestRoom = "",
+      smallestArea = MAX_ROOM_SIZE * MAX_ROOM_SIZE,
+      smallestRoom = "",
+      area;
+
+  for (let rm of rooms) {
+    area = rm[0].width * rm[0].height;
+    if (area >= biggestArea) {
+      biggestArea = area;
+      biggestRoom = rm;
+    }
+    if (area <= smallestArea) {
+      smallestArea = area;
+      smallestRoom = rm;
+    }
+  }
+  let rooms_to_populate = rooms;
+  rooms_to_populate.splice(rooms_to_populate.indexOf(biggestRoom), 1);
+  rooms_to_populate.splice(rooms_to_populate.indexOf(smallestRoom), 1);
+
+  map = placeEnemies(rooms_to_populate, map);
+
+  map = placeBoss(biggestRoom[0], map);
+
+  map = placePlayer(smallestRoom[0], map);
+  return map;
+}
+
+function create_map() {
+  let map = [],
+      rooms = create_rooms();
+  for (let x = 0; x < TILE_ACROSS; x++) {
+    map.push((new Array(TILE_DOWN)).fill(0));
+  }
+  for (let rm of rooms) {
+    for (let x = 0; x < rm[0].width; x++) {
+      for (let y = 0; y < rm[0].height; y++) {
+        map[rm[0].pos_x+x][rm[0].pos_y+y] = 1;
+      }
+    }
+    rm[1] = create_corridors(rm, rooms);
+    //Create the corridors on the map array
+    for (let [key, value] of rm[1]) {
+      let skip = 100;
+      if (rm[1].size > 1) {
+        skip = getRandomInteger(0, 100); // Chance to skip drawing this corridor
+      }
+      if ((value != null) && (value != 0) && (skip > 20)) {
+        let dir = [0, 0],
+            start_pos = [rm[0].pos_x, rm[0].pos_y],
+            end_pos = [value[0][0].pos_x, value[0][0].pos_y],
+            mid_overlap = value[1][Math.floor(value[1].length / 2)];
+        if (key === "NORTH") {
+          dir[1] = -1;
+          start_pos[0] = mid_overlap;
+          start_pos[1] -= 1;
+          end_pos[0] = mid_overlap;
+          end_pos[1] += value[0][0].height;
+          tile = 3;
+        }
+        else if (key === "SOUTH") {
+          dir[1] = 1;
+          start_pos[0] = mid_overlap;
+          start_pos[1] += rm[0].height;
+          end_pos[0] = mid_overlap;
+          end_pos[1] -= 1;
+          tile = 3;
+        }
+        else if (key === "EAST") {
+          dir[0] = 1;
+          start_pos[0] += rm[0].width;
+          start_pos[1] = mid_overlap;
+          end_pos[0] -= 1;
+          end_pos[1] = mid_overlap;
+          tile = 2;
+        }
+        else if (key === "WEST") {
+          dir[0] = -1;
+          start_pos[0] -= 1;
+          start_pos[1] = mid_overlap;
+          end_pos[0] += value[0][0].width;
+          end_pos[1] = mid_overlap;
+          tile = 2;
+        }
+        map[start_pos[0]][start_pos[1]] = tile;
+        map[end_pos[0]][end_pos[1]] = tile;
+        let distance = (start_pos[0] - end_pos[0]) + (start_pos[1] - end_pos[1]),
+            next_pos = start_pos;
+        for (let i = 0; i < Math.abs(distance); i++) {
+          next_pos = [next_pos[0] + dir[0], next_pos[1] + dir[1]];
+          if (map[next_pos[0]][next_pos[1]] === 0) {
+            map[next_pos[0]][next_pos[1]] = tile;
+          }
+        }
+      }
+    }
+  }
+  map = populateRooms(rooms, map);
+  return map;
+}
+
+
+/*
+ * Dungeon game code
+ */
+// Window Parameters // Viewport
+const SCREEN_WIDTH = 10;
+const SCREEN_HEIGHT = 8;
+
+// Pygame Zero width and height for the game
+WIDTH = SCREEN_WIDTH * TILE_SIZE;
+HEIGHT = SCREEN_HEIGHT * TILE_SIZE;
+
+var screen_pos, playerTile, player, player_object, map;
+
+// Create the player variables
+class Player {
+  constructor(actor, health, inventory) {
+    this.Actor = actor;
+    this.Health = health;
+    this.Inventory = inventory;
+  }
+
+  Attack() {
+    for (let y = -1; y < 2; y++) {
+      for (let x = -1; x < 2; x++) {
+        let check_x = playerTile[0] + x,
+            check_y = playerTile[1] + y;
+        if ((map[check_x][check_y] === 4) || (map[check_x][check_y] === 5)) {
+          map[check_x][check_y] = 1;
+          break;
+        }
+      }
+    }
+  }
+}
+
+function camera_follow() {
+  screen_pos[0] = playerTile[0] - Math.floor(SCREEN_WIDTH / 2);
+  screen_pos[1] = playerTile[1] - Math.floor(SCREEN_HEIGHT / 2);
+
+  if (screen_pos[0] < 0) {
+    screen_pos[0] = 0;
+  }
+  else if ((screen_pos[0] + SCREEN_WIDTH) > map.length) {
+    screen_pos[0] = map.length - SCREEN_WIDTH;
+  }
+
+  if (screen_pos[1] < 0) {
+    screen_pos[1] = 0;
+  }
+  else if ((screen_pos[1] + SCREEN_HEIGHT) > map[0].length) {
+    screen_pos[1] = map[0].length - SCREEN_HEIGHT;
+  }
+}
+
+function on_key_down(key) {
+  if (key === keys.A) {
+    player_object.Attack();
+  }
+  let new_pos = [playerTile[0], playerTile[1]];
+  if (key === keys.RIGHT) {
+    new_pos[0] += 1;
+  }
+  if (key === keys.LEFT) {
+    new_pos[0] -= 1;
+  }
+  if (key === keys.UP) {
+    new_pos[1] -= 1;
+  }
+  if (key === keys.DOWN) {
+    new_pos[1] += 1;
+  }
+  if (movement_collision(new_pos)) {
+    playerTile[0] = new_pos[0];
+    playerTile[1] = new_pos[1];
+  }
+  camera_follow();
+}
+
+function movement_collision(position) {
+  let tile = map[position[0]][position[1]];
+  if ((tile === 1) || (tile === 2) || (tile === 3) || (tile === 4)) {
+    return true;
+  }
+  else if (tile === 0) {
+    return false;
+  }
+  else if (tile === 6) {
+    map[position[0]][position[1]] = 1;
+    console.log("Gold!");
+  }
+}
+
+function draw_level() {
+  const TILES = [["dirt"], ["sprite_00"], ["floor_1"], ["floor_2"], ["sprite_00", "enemy_00"], ["sprite_00", "enemy_01"], ["sprite_00", "chest"], ["sprite_00"]];
+
+  for (let i = 0; i < SCREEN_WIDTH; i++) {
+    for (let j = 0; j < SCREEN_HEIGHT; j++) {
+      let x = screen_pos[0] + i,
+          y = screen_pos[1] + j;
+      for (let tile of TILES[map[x][y]]) {
+        screen.blit(tile, [i * 32, j * 32]);
+      }
+
+      if ((x === playerTile[0]) && (y === playerTile[1])) {
+        player.posx = (i * 32) + Math.floor(player.width / 2);
+        player.posy = (j * 32) + Math.floor(player.height / 2);
+      }
+    }
+  }
+}
+
+function draw() {
+  draw_level();
+  player.draw();
+}
+
+function reset() {
+  // Set up world co-ordinates
+  // Top left corner of the screen
+  screen_pos = [0, 0];
+  // Player world co-ordinates
+  playerTile = [0, 0];
+
+  // Create the player Actor
+  player = new Actor("player");
+
+  player_object = new Player(player, 100, {});
+
+  // Generate the first Map
+  map = create_map();
+
+  // Search the Map for spawn positions
+  for (let x = 0; x < map.length; x++) {
+    for (let y = 0; y < map[0].length; y++) {
+      if (map[x][y] === 7) {
+        playerTile = [x, y];
+        map[x][y] = 1;
+      }
+    }
+  }
+
+  camera_follow();
+}
+
+window.addEventListener('load', (event) => {
+  images.LOAD('#imageLoader img');
+  reset();
+  screen.set_mode('#screen', '#reset', '#pause');
+});
+</script>
+</body>
+
+</html>
