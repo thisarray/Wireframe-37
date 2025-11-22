@@ -541,7 +541,7 @@ function create_rooms() {
 function create_corridors(rm, rooms) {
   let candidates = new Map([["NORTH", null], ["SOUTH", null], ["EAST", null], ["WEST", null]]);
   for (let other of rooms) {
-    if (other[0] != rm[0]) {
+    if (other[0] !== rm[0]) {
       let current_room = rm[0],
           other_room = other[0],
           left_marker = Math.max(current_room.pos_x, other_room.pos_x),
@@ -573,7 +573,7 @@ function vertical_corridors(candidates, other, rm, horizontal_overlap) {
       other_room = other[0],
       other_connections = other[1],
       connector;
-  if ((current_room.pos_y > other_room.pos_y) && (other_connections.get("SOUTH") == null) && (current_connections.get("NORTH") != 0)) {
+  if ((current_room.pos_y > other_room.pos_y) && (other_connections.get("SOUTH") == null) && (current_connections.get("NORTH") !== 0)) {
     connector = candidates.get("NORTH");
     if (connector == null) {
       candidates.set("NORTH", [other, horizontal_overlap]);
@@ -587,7 +587,7 @@ function vertical_corridors(candidates, other, rm, horizontal_overlap) {
       }
     }
   }
-  if ((current_room.pos_y < other_room.pos_y) && (other_connections.get("NORTH") == null) && (current_connections.get("SOUTH") != 0)) {
+  if ((current_room.pos_y < other_room.pos_y) && (other_connections.get("NORTH") == null) && (current_connections.get("SOUTH") !== 0)) {
     connector = candidates.get("SOUTH");
     if (connector == null) {
       candidates.set("SOUTH", [other, horizontal_overlap]);
@@ -609,7 +609,7 @@ function horizontal_corridors(candidates, other, rm, vertical_overlap) {
       other_room = other[0],
       other_connections = other[1],
       connector;
-  if ((current_room.pos_x > other_room.pos_x) && (other_connections.get("EAST") == null) && (current_connections.get("WEST") != 0)) {
+  if ((current_room.pos_x > other_room.pos_x) && (other_connections.get("EAST") == null) && (current_connections.get("WEST") !== 0)) {
     connector = candidates.get("WEST");
     if (connector == null) {
       candidates.set("WEST", [other, vertical_overlap]);
@@ -623,7 +623,7 @@ function horizontal_corridors(candidates, other, rm, vertical_overlap) {
       }
     }
   }
-  if ((current_room.pos_x < other_room.pos_x) && (other_connections.get("WEST") == null) && (current_connections.get("EAST") != 0)) {
+  if ((current_room.pos_x < other_room.pos_x) && (other_connections.get("WEST") == null) && (current_connections.get("EAST") !== 0)) {
     connector = candidates.get("EAST");
     if (connector == null) {
       candidates.set("EAST", [other, vertical_overlap]);
@@ -642,7 +642,7 @@ function horizontal_corridors(candidates, other, rm, vertical_overlap) {
 function find_position(room, map) {
   let x_pos = room.pos_x + getRandomInteger(0, room.width - 1),
       y_pos = room.pos_y + getRandomInteger(0, room.height - 1);
-  while (map[x_pos][y_pos] != 1) {
+  while (map[x_pos][y_pos] !== 1) {
     x_pos = room.pos_x + getRandomInteger(0, room.width);
     y_pos = room.pos_y + getRandomInteger(0, room.height);
   }
@@ -739,7 +739,7 @@ function create_map() {
       if (rm[1].size > 1) {
         skip = getRandomInteger(0, 100); // Chance to skip drawing this corridor
       }
-      if ((value != null) && (value != 0) && (skip > 20)) {
+      if ((value != null) && (value !== 0) && (skip > 20)) {
         let dir = [0, 0],
             start_pos = [rm[0].pos_x, rm[0].pos_y],
             end_pos = [value[0][0].pos_x, value[0][0].pos_y],
