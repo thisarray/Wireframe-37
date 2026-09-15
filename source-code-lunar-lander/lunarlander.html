@@ -138,9 +138,7 @@ const GRAVITY = 0.8;
 var backgroundImage, lander, speedDown, gameState, gameTime;
 
 function reset() {
-  screen.clear();
-  screen.blit('background', [0, 0]);
-  backgroundImage = screen.getSurface();
+  backgroundImage = Surface.fromImage('background');
 
   lander = new Actor('lander');
   lander.pos = [50, 30];
